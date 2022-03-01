@@ -41,19 +41,19 @@ io.on("connection", (socket) => {
         socket.emit("joinRoom", { id: room.id, name, owner: room.owner, users: getRoomUsers(room.id) })
     })
 
-    socket.on("joinRoom", (id) => {
+    socket.on("joinRoom", ({ id, spectate }) => {
         const index = rooms.findIndex(elt => elt.id === id)
         if (index === -1) {
             return socket.emit("UnoError", "Invalid ID")
         }
 
-        const alreadyInRoom = rooms.some(elt => elt.users.includes(socket.id))
+        const alreadyInRoom = rooms.some(elt => elt.users.includes(socket.id) || elt.spectators.includes(socket.id))
 
         if (alreadyInRoom) {
             return socket.emit("UnoError", "Already in room")
         }
 
-        rooms[index].users.push(socket.id)
+        (spectate ? rooms[index].spectators : rooms[index].users).push(socket.id)
         const { name, owner } = rooms[index]
         io.in(socket.id).socketsJoin(id)
         socket.emit("joinRoom", { id, name, owner, users: [] })
@@ -68,22 +68,11 @@ io.on("connection", (socket) => {
         }
         rooms[roomIndex].users.splice(rooms[roomIndex].users.findIndex(elt => elt === socket.id), 1)
         io.in(socket.id).socketsLeave(rooms[roomIndex].id)
-        io.in(rooms[roomIndex].id).emit("usersUpdate", getRoomUsers(id))
+        io.in(rooms[roomIndex].id).emit("usersUpdate", getRoomUsers(rooms[roomIndex].id))
         socket.emit("leaveRoom")
     })
 
     socket.on("spectateRoom", id => {
-        const index = rooms.findIndex(elt => elt.id === id)
-        if (index === -1) {
-            return socket.emit("UnoError", "Invalid ID")
-        }
-
-        const alreadyInRoom = rooms.some(elt => elt.users.includes(socket.id))
-
-        if (alreadyInRoom) {
-            return socket.emit("UnoError", "Already in room")
-        }
-
         rooms[index].spectators.push(socket.id)
         const { name, owner } = rooms[index]
         io.in(id).emit("usersUpdate", getRoomUsers(id))
@@ -100,6 +89,8 @@ io.on("connection", (socket) => {
                 .emit("nameChange", { id: socket.id, name: newName })
         }
     })
+
+    socket.on("startGame", () => { })
 
     socket.onAny(console.log)
 })

@@ -1,47 +1,46 @@
 <script>
+  import { ID, Room, Spectate } from "./utils/stores.js";
+  import Lobby from "./pages/Lobby.svelte";
   const socket = io();
-  let userID = "";
 
-  socket.on("userInfo", (user) => {
-    userID = user.id;
-  });
+  socket.on("userInfo", (info) => ID.update(() => info.id));
 
   let room = {};
 
   let username = "Guest";
   let roomID = "";
-  let spectate = false;
 
   socket.onAny(console.log);
 
   socket.on("joinRoom", (newRoom) => {
     room = newRoom;
+    Room.set(room);
   });
-
-  socket.on("leaveRoom", () => {
-    room = {};
-    spectate = false;
-  });
-
   socket.on("usersUpdate", (newUsers) => {
     room.users = newUsers;
+    Room.set(room);
+  });
+  socket.on("leaveRoom", () => {
+    room = {};
+    Room.set({});
+    Spectate.set(false);
   });
 
   function createRoom() {
     socket.emit("createRoom", username + "'s room");
   }
 
-  function leaveRoom() {
-    socket.emit("leaveRoom");
-  }
-
   function joinRoom() {
-    socket.emit("joinRoom", roomID);
+    socket.emit("joinRoom", { id: roomID, spectate: false });
   }
 
   function spectateRoom() {
-    socket.emit("spectateRoom", roomID);
-    spectate = true;
+    socket.emit("joinRoom", { id: roomID, spectate: true });
+    Spectate.set(false);
+  }
+
+  function handleEvt(eventData) {
+    socket.emit(eventData.detail);
   }
 
   $: socket.emit("nameChange", username);
@@ -60,23 +59,7 @@
     <button on:click={joinRoom}>JOIN ROOM</button>
     <button on:click={spectateRoom}>SPECTATE ROOM</button>
   {:else}
-    <p>You're in '{room.name}' now.</p>
-    <p>Secret join code: <span>{room.id}</span></p>
-    <br />
-
-    <p>Users ({(room.users || []).length}):</p>
-
-    {#each room.users as { id, name, spectator }}
-      <p>
-        {name ? name : "Guest"}
-        {#if id === userID} (You) {/if}
-        {#if spectator || (id === userID && spectate)} (Ghost) {/if}
-      </p>
-    {:else}
-      {""}
-    {/each}
-
-    <button on:click={leaveRoom}>LEAVE ROOM</button>
+    <Lobby on:evt={handleEvt} />
   {/if}
 </main>
 
@@ -99,13 +82,5 @@
     main {
       max-width: none;
     }
-  }
-
-  span {
-    background-color: black;
-    color: white;
-    width: max-content;
-    height: max-content;
-    padding: 5px 10px;
   }
 </style>
