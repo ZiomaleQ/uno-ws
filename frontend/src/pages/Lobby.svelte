@@ -1,18 +1,17 @@
 <script>
   import { ID, Room, Spectate } from "../utils/stores.js";
-  import { createEventDispatcher } from "svelte";
+
+  export let socket = {};
 
   let room = {};
   Room.subscribe((newRoom) => (room = newRoom));
 
-  const dispatch = createEventDispatcher();
-
   function leaveRoom() {
-    dispatch("evt", "leaveRoom");
+    socket.emit("leaveRoom");
   }
 
   function startGame() {
-    dispatch("evt", "startGame");
+    socket.emit("startGame", { skip: true });
   }
 </script>
 
@@ -31,7 +30,7 @@
 {/each}
 
 <button on:click={leaveRoom}>LEAVE ROOM</button>
-<button on:click={startGame}>"START GAME"</button>
+<button on:click={startGame}>START GAME</button>
 
 <style>
   span {

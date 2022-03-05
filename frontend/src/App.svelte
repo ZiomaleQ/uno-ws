@@ -1,17 +1,21 @@
 <script>
-  import { ID, Room, Spectate } from "./utils/stores.js";
+  import { ID, Room, Spectate, GameData } from "./utils/stores.js";
   import Lobby from "./pages/Lobby.svelte";
+  import Game from "./pages/Game.svelte";
   const socket = io();
 
   socket.on("userInfo", (info) => ID.update(() => info.id));
 
   let room = {};
-
   let username = "Guest";
   let roomID = "";
 
   socket.onAny(console.log);
 
+  // socket.emit("createRoom");
+  // socket.emit("startGame", { skip: true });
+
+  socket.on("gameStart", (data) => GameData.set({ active: true, ...data }));
   socket.on("joinRoom", (newRoom) => {
     room = newRoom;
     Room.set(room);
@@ -24,6 +28,9 @@
     room = {};
     Room.set({});
     Spectate.set(false);
+  });
+  socket.on("endGame", (winner) => {
+    alert(winner);
   });
 
   function createRoom() {
@@ -39,27 +46,27 @@
     Spectate.set(false);
   }
 
-  function handleEvt(eventData) {
-    socket.emit(eventData.detail);
-  }
-
   $: socket.emit("nameChange", username);
 </script>
 
 <main>
-  <h1>Hello {username}!</h1>
-  <input type="text" bind:value={username} />
-
-  {#if Object.keys(room).length === 0}
-    <button on:click={createRoom}>CREATE ROOM</button>
-
-    <br />
-
-    <input type="text" bind:value={roomID} />
-    <button on:click={joinRoom}>JOIN ROOM</button>
-    <button on:click={spectateRoom}>SPECTATE ROOM</button>
+  {#if $GameData.active}
+    <Game {socket} {username} />
   {:else}
-    <Lobby on:evt={handleEvt} />
+    <h1>Hello {username}!</h1>
+    <input type="text" bind:value={username} />
+
+    {#if Object.keys(room).length === 0}
+      <button on:click={createRoom}>CREATE ROOM</button>
+
+      <br />
+
+      <input type="text" bind:value={roomID} />
+      <button on:click={joinRoom}>JOIN ROOM</button>
+      <button on:click={spectateRoom}>SPECTATE ROOM</button>
+    {:else}
+      <Lobby {socket} />
+    {/if}
   {/if}
 </main>
 
