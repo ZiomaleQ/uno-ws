@@ -147,12 +147,17 @@ io.on("connection", (socket) => {
         let { game, id, playerCards } = rooms[roomIndex]
 
         if (game.turn === socket.id) {
+
+            if (!canPlay(id, card)) {
+                return socket.emit("UnoError", "Can't play that card")
+            }
+
             game.top = card
 
             const cardIndex = playerCards[socket.id].findIndex(elt => elt === card)
 
             if (cardIndex === -1) {
-                return socket.emit("UnoError", "You dont't have that hard")
+                return socket.emit("UnoError", "You dont't have that card")
             }
 
             let colorPick = false
@@ -235,13 +240,12 @@ io.on("connection", (socket) => {
                 io.in(id).emit("endGame", socket.id)
             }
 
-
             if (colorPick) {
                 io.in(id).emit("cardEffect", { pickColor: true, who: socket.id })
                 await new Promise((resolve, _) => {
                     if (game === undefined) resolve()
                     socket.once("pickColor", color => {
-                        game.topCard = (color - 1) * 15
+                        game.top = (color - 1) * 15
                         io.in(id).emit("topCard", (color - 1) * 15)
                         io.in(id).emit("turn", game.turn)
                         resolve()
@@ -326,4 +330,73 @@ function getNextPlayer(id) {
         ?? game.playerTurn[game.reverse ? game.playerTurn.length - 1 : 0]
 
     return nextPlayer
+}
+
+function canPlay(id, card) {
+    const room = rooms.find(elt => elt.id === id)
+    const roomIndex = rooms.findIndex(elt => elt.id === id)
+
+    if (roomIndex === -1) return false
+
+    const { game } = room
+
+    const topCardData = getCardData(game.top)
+    const playedCardData = getCardData(card)
+
+    if (topCardData.color === "wild" || playedCardData.color === "wild") {
+        return true
+    }
+
+    if (topCardData.value === playedCardData.value) {
+        return true
+    }
+
+    if (topCardData.color === playedCardData.color) {
+        return true
+    }
+
+    return false
+}
+
+function getCardData(card) {
+    let color = ""
+    let value = ""
+    switch (Math.floor((card > 60 ? card - 60 : card) / 15)) {
+        //Times 4 \/
+        //10x (0 - 9) numbers, 1x +2, 1x Block, 1x Reverse, 1x wild, 1x +4
+        case 0:
+            color = "red";
+            break;
+        case 1:
+            color = "blue";
+            break;
+        case 2:
+            color = "green";
+            break;
+        case 3:
+        case 4:
+            color = "yellow";
+            break;
+    }
+
+    switch ((card > 60 ? card - 60 : card) % 15) {
+        case 10:
+            value = "+2";
+            break;
+        case 11:
+            value = "block";
+            break;
+        case 12:
+            value = "reverse";
+            break;
+        default:
+            value = card % 15;
+    }
+
+    if (card % 15 === 13 || card % 15 === 14) {
+        color = "wild";
+        value = card % 15 === 13 ? "card" : "draft";
+    }
+
+    return { color, value }
 }

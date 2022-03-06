@@ -11,7 +11,7 @@
   let roomID = "";
 
   socket.onAny(console.log);
-
+  
   socket.on("gameStart", (data) => GameData.set({ active: true, ...data }));
   socket.on("joinRoom", (newRoom) => {
     room = newRoom;

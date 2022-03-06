@@ -48,6 +48,8 @@
     cards = cards;
   });
 
+  let pickColor = false;
+
   socket.on("cardEffect", (data) => {
     if (data.draw !== undefined) {
       if (data.cards !== undefined) {
@@ -63,13 +65,28 @@
       }
     }
 
-    if(data.pickColor === true) {
-      socket.emit("pickColor", 1)
-    }
+    if (data.pickColor === true && data.who === $ID) pickColor = true;
   });
 
   function drawCard() {
     socket.emit("drawCard");
+  }
+
+  function pickRed() {
+    socket.emit("pickColor", 1);
+    pickColor = false
+  }
+  function pickBlue() {
+    socket.emit("pickColor", 2);
+    pickColor = false
+  }
+  function pickGreen() {
+    socket.emit("pickColor", 3);
+    pickColor = false
+  }
+  function pickYellow() {
+    socket.emit("pickColor", 4);
+    pickColor = false
   }
 </script>
 
@@ -93,6 +110,14 @@
   <div class="topCard">
     <Card card={topCard} onClick={() => {}} />
   </div>
+
+  <div class="pickColor" style="display: {pickColor ? 'flex' : 'none'};">
+    <div class="color red" on:click={pickRed} />
+    <div class="color blue" on:click={pickBlue} />
+    <div class="color green" on:click={pickGreen} />
+    <div class="color yellow" on:click={pickYellow} />
+  </div>
+
   <div class="user">
     <div class="profile">
       <div class="userIcon">
@@ -192,5 +217,40 @@
     height: 25px;
     padding: 0px;
     -webkit-padding: 0px;
+  }
+
+  .pickColor {
+    width: 300px;
+    height: 300px;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    flex-wrap: wrap;
+  }
+
+  .red {
+    background-color: #c42335;
+    color: #c42335;
+  }
+
+  .green {
+    background-color: #62a92d;
+    color: #62a92d;
+  }
+
+  .yellow {
+    background-color: #ebce2c;
+    color: #ebce2c;
+  }
+
+  .blue {
+    background-color: #0158a8;
+    color: #0158a8;
+  }
+
+  .color {
+    width: 150px;
+    height: 150px;
   }
 </style>
