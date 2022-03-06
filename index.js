@@ -98,7 +98,8 @@ io.on("connection", (socket) => {
             top: topCard,
             cards: [...new Array(120)].map((_, i) => i + 1).filter(elt => elt !== topCard),
             turn: users.length > 1 ? users[randomNumber(users.length - 1)] : users[0],
-            playerTurn: users.sort(() => Math.random() - 0.5)
+            playerTurn: users.sort(() => Math.random() - 0.5),
+            reverse: false
         }
 
         const { owner, id, game } = rooms[roomIndex]
@@ -136,20 +137,16 @@ io.on("connection", (socket) => {
         }
     })
 
-    socket.on("playCard", card => {
+    socket.on("playCard", async card => {
         const roomIndex = rooms.findIndex(elt => elt.users.includes(socket.id))
 
         if (roomIndex === -1) {
             return socket.emit("UnoError", "Not in room")
         }
 
-        const { game, id, playerCards } = rooms[roomIndex]
-
-        const index = game.playerTurn.findIndex(user => user === socket.id)
-        const nextPlayer = game.playerTurn[index + 1] ?? game.playerTurn[0]
+        let { game, id, playerCards } = rooms[roomIndex]
 
         if (game.turn === socket.id) {
-            game.turn = nextPlayer
             game.top = card
 
             const cardIndex = playerCards[socket.id].findIndex(elt => elt === card)
@@ -158,14 +155,98 @@ io.on("connection", (socket) => {
                 return socket.emit("UnoError", "You dont't have that hard")
             }
 
-            io.in(id).emit("turn", nextPlayer)
+            let colorPick = false
+
+            switch ((card > 60 ? card - 60 : card) % 15) {
+                case 10: {
+                    //draw 2
+
+                    const nextPlayer = getNextPlayer(id)
+                    const cards = [drawCard(id), drawCard(id)]
+
+                    io.in(id).except(nextPlayer).emit("cardEffect", { draw: 2, who: nextPlayer })
+                    io.to(nextPlayer).emit("cardEffect", { draw: 2, who: nextPlayer, cards })
+
+                    game.turn = nextPlayer
+
+                    playerCards[nextPlayer].push(...cards)
+                    rooms[roomIndex].playerCards = playerCards
+
+                    break;
+                }
+                case 11:
+                    //block
+
+                    //Next player is blocked
+                    const blockedPlayer = getNextPlayer(id)
+                    game.turn = blockedPlayer
+                    //Next non blocked player
+                    const nextNonBlocked = getNextPlayer(id)
+                    game.turn = nextNonBlocked
+
+                    io.in(id).emit("cardEffect", { skip: true, who: blockedPlayer, turn: nextNonBlocked })
+
+                    break;
+                case 12:
+                    //reverse
+
+                    game.reverse = !game.reverse
+                    rooms[roomIndex].game = game
+                    game.turn = getNextPlayer(id)
+
+                    io.in(id).emit("cardEffect", { reverse: true, turn: game.turn })
+
+                    break;
+                case 13:
+                    //wild card
+
+                    colorPick = true
+
+                    break;
+                case 14: {
+                    //wild draft
+
+                    const cards = [drawCard(id), drawCard(id), drawCard(id), drawCard(id)]
+
+                    game.turn = getNextPlayer(id)
+                    colorPick = true
+
+                    io.in(id).except(game.turn).emit("cardEffect", { draw: 4, who: game.turn })
+                    io.to(game.turn).emit("cardEffect", { draw: 4, who: game.turn, cards })
+
+                    playerCards[game.turn].push(...cards)
+                    rooms[roomIndex].playerCards = playerCards
+                    break;
+                }
+            }
+
+            if (!colorPick) {
+                io.in(id).emit("turn", game.turn)
+            }
+
             io.in(id).emit("cardPlayed", { who: socket.id, card })
             io.in(id).emit("topCard", card)
 
             playerCards[socket.id].splice(cardIndex, 1)
 
             if (playerCards[socket.id].length === 0) {
+                game = undefined
+                playerCards = {}
                 io.in(id).emit("endGame", socket.id)
+            }
+
+
+            if (colorPick) {
+                io.in(id).emit("cardEffect", { pickColor: true, who: socket.id })
+                await new Promise((resolve, _) => {
+                    if (game === undefined) resolve()
+                    socket.once("pickColor", color => {
+                        game.topCard = (color - 1) * 15
+                        io.in(id).emit("topCard", (color - 1) * 15)
+                        io.in(id).emit("turn", game.turn)
+                        resolve()
+                    })
+                })
             }
 
             rooms[roomIndex].game = game
@@ -173,7 +254,6 @@ io.on("connection", (socket) => {
         } else {
             return socket.emit("UnoError", "Not your turn")
         }
-
     })
 
     socket.on("drawCard", () => {
@@ -191,7 +271,8 @@ io.on("connection", (socket) => {
             playerCards[socket.id].push(card)
             rooms[roomIndex].playerCards = playerCards
 
-            io.in(id).emit("drawCard", { who: socket.id, card })
+            socket.emit("drawCard", { who: socket.id, card })
+            io.in(id).except(socket.id).emit("drawCard", { who: socket.id, card })
 
         } else {
             return socket.emit("UnoError", "Not your turn")
@@ -230,4 +311,19 @@ function drawCard(id) {
         rooms[roomIndex].game.cards = room.game.cards
         return drawCard(id)
     }
+}
+
+function getNextPlayer(id) {
+    const room = rooms.find(elt => elt.id === id)
+    const roomIndex = rooms.findIndex(elt => elt.id === id)
+
+    if (roomIndex === -1) return ""
+
+    const { game } = room
+
+    const index = game.playerTurn.findIndex(user => user === game.turn)
+    const nextPlayer = game.playerTurn[index + game.reverse ? - 1 : + 1]
+        ?? game.playerTurn[game.reverse ? game.playerTurn.length - 1 : 0]
+
+    return nextPlayer
 }

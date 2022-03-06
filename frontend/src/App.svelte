@@ -12,9 +12,6 @@
 
   socket.onAny(console.log);
 
-  // socket.emit("createRoom");
-  // socket.emit("startGame", { skip: true });
-
   socket.on("gameStart", (data) => GameData.set({ active: true, ...data }));
   socket.on("joinRoom", (newRoom) => {
     room = newRoom;
@@ -30,7 +27,13 @@
     Spectate.set(false);
   });
   socket.on("endGame", (winner) => {
-    alert(winner);
+    alert(
+      $Room.users.find((elt) => elt.id == winner).name ?? "Guest" + " won the game!"
+    );
+    GameData.update((old) => {
+      old.active = false;
+      return old;
+    });
   });
 
   function createRoom() {

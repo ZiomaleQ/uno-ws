@@ -41,10 +41,31 @@
         othersCards[data.who] = 7;
       }
       othersCards[data.who]++;
+      return;
     }
 
     cards.push(data.card);
     cards = cards;
+  });
+
+  socket.on("cardEffect", (data) => {
+    if (data.draw !== undefined) {
+      if (data.cards !== undefined) {
+        cards.push(...data.cards);
+        cards = cards;
+        return;
+      } else {
+        if (othersCards[data.who] === undefined) {
+          othersCards[data.who] = 7;
+        }
+        othersCards[data.who] += data.draw;
+        return;
+      }
+    }
+
+    if(data.pickColor === true) {
+      socket.emit("pickColor", 1)
+    }
   });
 
   function drawCard() {
