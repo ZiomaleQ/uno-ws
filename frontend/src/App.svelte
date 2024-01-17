@@ -1,72 +1,113 @@
 <script>
-  import { ID, Room, Spectate, GameData } from "./utils/stores.js";
-  import Lobby from "./pages/Lobby.svelte";
-  import Game from "./pages/Game.svelte";
-  const socket = io();
+  import { ID, Room, Spectate, GameData } from './utils/stores.js'
+  import Lobby from './pages/Lobby.svelte'
+  import Game from './pages/Game.svelte'
+  let rooms = fetch('/api/rooms').then((res) => res.json())
+  const socket = io()
 
-  socket.on("userInfo", (info) => ID.update(() => info.id));
+  socket.on('userInfo', (info) => ID.update(() => info.id))
 
-  let room = {};
-  let username = "Guest";
-  let roomID = "";
+  let room = {}
+  let username = 'Guest'
+  let roomID = ''
 
-  socket.onAny(console.log);
-  
-  socket.on("gameStart", (data) => GameData.set({ active: true, ...data }));
-  socket.on("joinRoom", (newRoom) => {
-    room = newRoom;
-    Room.set(room);
-  });
-  socket.on("usersUpdate", (newUsers) => {
-    room.users = newUsers;
-    Room.set(room);
-  });
-  socket.on("leaveRoom", () => {
-    room = {};
-    Room.set({});
-    Spectate.set(false);
-  });
-  socket.on("endGame", (winner) => {
+  socket.onAny(console.log)
+
+  socket.on('gameStart', (data) => GameData.set({ active: true, ...data }))
+  socket.on('joinRoom', (newRoom) => {
+    room = newRoom
+    Room.set(room)
+  })
+  socket.on('usersUpdate', (newUsers) => {
+    room.users = newUsers
+    Room.set(room)
+  })
+  socket.on('leaveRoom', () => {
+    room = {}
+    Room.set({})
+    Spectate.set(false)
+  })
+  socket.on('endGame', (winner) => {
     alert(
-      $Room.users.find((elt) => elt.id == winner).name ?? "Guest" + " won the game!"
-    );
+      $Room.users.find((elt) => elt.id == winner).name ??
+        'Guest' + ' won the game!'
+    )
     GameData.update((old) => {
-      old.active = false;
-      return old;
-    });
-  });
+      old.active = false
+      return old
+    })
+  })
 
   function createRoom() {
-    socket.emit("createRoom", username + "'s room");
+    socket.emit('createRoom', username + "'s room")
   }
 
   function joinRoom() {
-    socket.emit("joinRoom", { id: roomID, spectate: false });
+    socket.emit('joinRoom', { id: roomID, spectate: false })
   }
 
   function spectateRoom() {
-    socket.emit("joinRoom", { id: roomID, spectate: true });
-    Spectate.set(false);
+    socket.emit('joinRoom', { id: roomID, spectate: true })
+    Spectate.set(false)
   }
 
-  $: socket.emit("nameChange", username);
+  function refreshRooms() {
+    rooms = fetch('/api/rooms').then((res) => res.json())
+  }
+
+  $: socket.emit('nameChange', username)
 </script>
 
 <main>
   {#if $GameData.active}
-    <Game {socket} {username} />
+    <Game
+      {socket}
+      {username}
+    />
   {:else}
     <h1>Hello {username}!</h1>
-    <input type="text" bind:value={username} />
+    <input
+      type="text"
+      bind:value={username}
+    />
 
     {#if Object.keys(room).length === 0}
       <button on:click={createRoom}>CREATE ROOM</button>
 
       <br />
 
-      <input type="text" bind:value={roomID} />
+      <input
+        type="text"
+        bind:value={roomID}
+      />
       <button on:click={joinRoom}>JOIN ROOM</button>
       <button on:click={spectateRoom}>SPECTATE ROOM</button>
+
+      <br />
+      Or join from a list:
+      <br />
+      {#await rooms}
+        ... Waiting ...
+      {:then rooms}
+        {#if rooms.length == 0}
+          No rooms! Create your own
+        {:else}
+          {#each rooms as room}
+            {room.name}
+            <button
+              on:click={() => {
+                roomID = room.id
+                joinRoom()
+              }}
+            >
+              Join
+            </button>
+            <br />
+          {/each}
+        {/if}
+      {/await}
+      <br />
+      <button on:click={refreshRooms}>REFRESH ROOMS</button>
     {:else}
       <Lobby {socket} />
     {/if}
